@@ -1,195 +1,54 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import {
-  Mic,
-  Square,
-  RotateCcw,
-  Check,
-  X,
-  Loader2,
-  FileText,
-  Sparkles,
-  Link as LinkIcon,
-  Copy,
-} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { FileText, AlertCircle, ExternalLink, Loader2 } from 'lucide-react';
 
-const SAMPLE_DRAFT = `Why Every NJ Advisor Should Be Talking About Long-Term Care
+function relativeTime(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const diff = (Date.now() - date.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 604800)}w ago`;
+  return `${Math.floor(diff / 2592000)}mo ago`;
+}
 
-The conversation around long-term care has shifted. Five years ago, advisors could get away with a single slide in a retirement plan presentation — a polite mention of "potential care costs" before moving on to allocation models.
-
-That's no longer enough. New Jersey ranks among the most expensive states in the country for long-term care, and the gap between what families expect to pay and what they actually will is widening every year. Clients are reading about it. They're seeing it happen to their parents. And if you're not bringing it up, someone else will.
-
-Here's what every advisor should be addressing in 2026: the funding question, the venue question, and the family question. Each one carries weight, and each one is easier to discuss before a crisis than after.`;
-
-// URL-safe base64 encoding that handles unicode correctly
-const encodeText = (s) => {
-  if (typeof window === 'undefined') return '';
-  const bytes = new TextEncoder().encode(s);
-  let bin = '';
-  bytes.forEach((b) => (bin += String.fromCharCode(b)));
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const STATUS_STYLES = {
+  draft: { label: 'Draft', color: '#8a7f6a', bg: '#ede6d3' },
+  pending: { label: 'Pending Review', color: '#b85c00', bg: '#fce8d1' },
+  private: { label: 'Private', color: '#5a3a8e', bg: '#e8dcf5' },
+  future: { label: 'Scheduled', color: '#1e6091', bg: '#d6e9f5' },
 };
 
-const decodeText = (s) => {
-  try {
-    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(bytes);
-  } catch {
-    return '';
-  }
-};
-
-export default function VoiceBlogEditor() {
-  const [draft, setDraft] = useState('');
-  const [revised, setRevised] = useState('');
-  const [transcript, setTranscript] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
+export default function Dashboard() {
+  const [drafts, setDrafts] = useState(null);
   const [error, setError] = useState('');
-  const [reviewerName, setReviewerName] = useState('Matt Simon');
-  const [shareConfirmation, setShareConfirmation] = useState('');
-  const [copyConfirmation, setCopyConfirmation] = useState('');
-  const recognitionRef = useRef(null);
-  const finalTranscriptRef = useRef('');
+  const [notConfigured, setNotConfigured] = useState(false);
+  const [reviewerName] = useState('Matt Simon');
 
-  // Load URL params on mount
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const d = params.get('d');
-    const name = params.get('name');
-    if (d) {
-      const decoded = decodeText(d);
-      if (decoded) setDraft(decoded);
-    }
-    if (name) setReviewerName(name);
-  }, []);
-
-  const startRecording = () => {
-    setError('');
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      setError('Speech recognition not supported. Try Chrome, Edge, or Safari.');
-      return;
-    }
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    finalTranscriptRef.current = transcript ? transcript.trimEnd() + ' ' : '';
-
-    recognition.onresult = (event) => {
-      let interim = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const text = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscriptRef.current += text + ' ';
+    fetch('/api/wp/drafts')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.notConfigured) {
+          setNotConfigured(true);
+          setDrafts([]);
+        } else if (data.error) {
+          setError(data.error);
         } else {
-          interim += text;
+          setDrafts(data.drafts);
         }
-      }
-      setTranscript(finalTranscriptRef.current + interim);
-    };
-
-    recognition.onerror = (event) => {
-      if (event.error === 'no-speech') return;
-      setError(`Recording error: ${event.error}`);
-      setIsRecording(false);
-    };
-
-    recognition.onend = () => setIsRecording(false);
-
-    recognition.start();
-    recognitionRef.current = recognition;
-    setIsRecording(true);
-  };
-
-  const stopRecording = () => {
-    if (recognitionRef.current) recognitionRef.current.stop();
-    setIsRecording(false);
-  };
-
-  const applyFeedback = async () => {
-    if (!draft.trim() || !transcript.trim()) return;
-    setIsProcessing(true);
-    setError('');
-    try {
-      const response = await fetch('/api/revise', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          draft,
-          transcript,
-          reviewerName,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `Server returned ${response.status}`);
-      }
-
-      setRevised(data.revised);
-    } catch (e) {
-      setError('Failed to apply feedback: ' + e.message);
-    }
-    setIsProcessing(false);
-  };
-
-  const acceptRevision = () => {
-    setDraft(revised);
-    setRevised('');
-    setTranscript('');
-    finalTranscriptRef.current = '';
-  };
-
-  const rejectRevision = () => setRevised('');
-
-  const clearTranscript = () => {
-    setTranscript('');
-    finalTranscriptRef.current = '';
-  };
-
-  const loadSample = () => setDraft(SAMPLE_DRAFT);
-
-  const copyShareLink = async () => {
-    if (!draft.trim()) return;
-    const encoded = encodeText(draft);
-    const url = `${window.location.origin}${window.location.pathname}?d=${encoded}&name=${encodeURIComponent(reviewerName)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setShareConfirmation('Link copied');
-      setTimeout(() => setShareConfirmation(''), 2000);
-    } catch {
-      setError('Could not copy to clipboard');
-    }
-  };
-
-  const copyDraft = async () => {
-    try {
-      await navigator.clipboard.writeText(draft);
-      setCopyConfirmation('Copied');
-      setTimeout(() => setCopyConfirmation(''), 2000);
-    } catch {
-      setError('Could not copy to clipboard');
-    }
-  };
-
-  const hasContent = draft.trim().length > 0;
-  const hasTranscript = transcript.trim().length > 0;
-  const wordCount = draft.split(/\s+/).filter(Boolean).length;
+      })
+      .catch((e) => setError(e.message));
+  }, []);
 
   return (
     <div className="min-h-screen w-full">
-      <header
-        className="border-b px-8 py-6"
-        style={{ borderColor: '#e0d8c4' }}
-      >
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+      <header className="border-b px-8 py-6" style={{ borderColor: '#e0d8c4' }}>
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div>
             <h1
               className="display text-3xl tracking-tight"
@@ -201,243 +60,140 @@ export default function VoiceBlogEditor() {
               className="text-xs uppercase mt-1"
               style={{ color: '#8a7f6a', letterSpacing: '0.22em' }}
             >
-              For {reviewerName}
+              {reviewerName}'s Drafts
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs">
-            <span
-              className={isRecording ? 'blink' : ''}
-              style={{ color: isRecording ? '#c0392b' : '#8a7f6a', fontSize: '10px' }}
-            >
-              ●
-            </span>
-            <span className="uppercase" style={{ color: '#8a7f6a', letterSpacing: '0.15em' }}>
-              {isRecording
-                ? 'Recording'
-                : isProcessing
-                ? 'Processing'
-                : revised
-                ? 'Review'
-                : 'Ready'}
-            </span>
-          </div>
+          {drafts && !notConfigured && (
+            <div className="text-xs" style={{ color: '#8a7f6a', letterSpacing: '0.15em' }}>
+              <span className="uppercase">{drafts.length} {drafts.length === 1 ? 'draft' : 'drafts'}</span>
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-8 py-10 grid grid-cols-1 lg:grid-cols-5 gap-8">
-        <section className="lg:col-span-3">
-          <div className="flex items-baseline justify-between mb-3">
-            <h2
-              className="text-xs uppercase"
-              style={{ color: '#8a7f6a', letterSpacing: '0.22em' }}
-            >
-              {revised ? 'Original Draft' : 'The Draft'}
+      <main className="max-w-5xl mx-auto px-8 py-10">
+        {error && (
+          <div
+            className="text-sm p-5 mb-6 flex items-start gap-3"
+            style={{ background: '#fdf0ed', color: '#c0392b', border: '1px solid #f4c8c0' }}
+          >
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="font-medium mb-1">Couldn't reach WordPress</div>
+              <div className="mono text-xs">{error}</div>
+            </div>
+          </div>
+        )}
+
+        {notConfigured && (
+          <div
+            className="p-8 mb-6"
+            style={{ background: '#fefaf0', border: '1px solid #e9d9ad' }}
+          >
+            <h2 className="display text-xl mb-2" style={{ color: '#1a1815' }}>
+              WordPress isn't connected yet
             </h2>
-            <div className="flex items-center gap-4 text-xs">
-              {!hasContent && !revised && (
-                <button
-                  onClick={loadSample}
-                  className="hover:underline"
-                  style={{ color: '#c0392b' }}
-                >
-                  Load sample
-                </button>
-              )}
-              {hasContent && !revised && (
-                <>
-                  <span style={{ color: '#8a7f6a' }}>{wordCount} words</span>
-                  <button
-                    onClick={copyDraft}
-                    className="flex items-center gap-1 hover:underline"
-                    style={{ color: '#8a7f6a' }}
-                  >
-                    <Copy size={11} />
-                    {copyConfirmation || 'Copy draft'}
-                  </button>
-                  <button
-                    onClick={copyShareLink}
-                    className="flex items-center gap-1 hover:underline"
-                    style={{ color: '#c0392b' }}
-                  >
-                    <LinkIcon size={11} />
-                    {shareConfirmation || 'Get link'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="bg-white paper-shadow" style={{ minHeight: '620px' }}>
-            <textarea
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              readOnly={!!revised}
-              placeholder="Paste the blog post draft here, or click 'Load sample' to try it out…"
-              className="w-full p-12 display resize-none focus:outline-none bg-transparent block"
-              style={{
-                minHeight: '620px',
-                color: '#1a1815',
-                fontSize: '17px',
-                lineHeight: '1.75',
-                fontVariationSettings: '"opsz" 14',
-              }}
-            />
-          </div>
-        </section>
-
-        <section className="lg:col-span-2 flex flex-col gap-6">
-          {revised ? (
-            <>
-              <div>
-                <h2
-                  className="text-xs uppercase mb-3 flex items-center gap-2"
-                  style={{ color: '#c0392b', letterSpacing: '0.22em' }}
-                >
-                  <Sparkles size={12} /> Proposed Revision
-                </h2>
-                <div
-                  className="bg-white p-8 paper-shadow"
-                  style={{ maxHeight: '520px', overflowY: 'auto' }}
-                >
-                  <div
-                    className="display whitespace-pre-wrap"
-                    style={{ color: '#1a1815', fontSize: '15px', lineHeight: '1.75' }}
-                  >
-                    {revised}
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={acceptRevision}
-                  className="flex-1 py-4 px-6 text-xs uppercase flex items-center justify-center gap-2 transition-all hover:opacity-90"
-                  style={{ background: '#1a1815', color: '#f6f3eb', letterSpacing: '0.15em' }}
-                >
-                  <Check size={14} /> Accept
-                </button>
-                <button
-                  onClick={rejectRevision}
-                  className="flex-1 py-4 px-6 text-xs uppercase flex items-center justify-center gap-2 transition-all hover:bg-stone-100"
-                  style={{ border: '1px solid #1a1815', color: '#1a1815', letterSpacing: '0.15em' }}
-                >
-                  <X size={14} /> Discard
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <h2
-                  className="text-xs uppercase mb-3"
-                  style={{ color: '#8a7f6a', letterSpacing: '0.22em' }}
-                >
-                  {reviewerName}'s Feedback
-                </h2>
-                <div className="bg-white p-10 soft-shadow flex flex-col items-center">
-                  <button
-                    onClick={isRecording ? stopRecording : startRecording}
-                    disabled={!hasContent || isProcessing}
-                    className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
-                      isRecording ? 'recording-pulse' : ''
-                    } ${
-                      !hasContent || isProcessing
-                        ? 'opacity-30 cursor-not-allowed'
-                        : 'cursor-pointer hover:scale-105'
-                    }`}
-                    style={{ background: isRecording ? '#c0392b' : '#1a1815', color: '#f6f3eb' }}
-                  >
-                    {isRecording ? (
-                      <Square size={26} fill="currentColor" />
-                    ) : (
-                      <Mic size={30} />
-                    )}
-                  </button>
-                  <p
-                    className="text-xs uppercase mt-5"
-                    style={{ color: '#8a7f6a', letterSpacing: '0.18em' }}
-                  >
-                    {!hasContent
-                      ? 'Paste a draft first'
-                      : isRecording
-                      ? 'Tap to stop'
-                      : 'Tap to record'}
-                  </p>
-                  {isRecording && (
-                    <p className="text-xs mt-2 italic" style={{ color: '#c0392b' }}>
-                      Listening…
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {hasTranscript && (
-                <div>
-                  <div className="flex items-baseline justify-between mb-3">
-                    <h3
-                      className="text-xs uppercase"
-                      style={{ color: '#8a7f6a', letterSpacing: '0.18em' }}
-                    >
-                      Transcript
-                    </h3>
-                    <button
-                      onClick={clearTranscript}
-                      className="text-xs flex items-center gap-1 hover:underline"
-                      style={{ color: '#8a7f6a' }}
-                    >
-                      <RotateCcw size={10} /> Clear
-                    </button>
-                  </div>
-                  <div
-                    className="bg-white p-5 soft-shadow"
-                    style={{ maxHeight: '180px', overflowY: 'auto' }}
-                  >
-                    <p
-                      className="mono text-sm"
-                      style={{ color: '#3a3530', lineHeight: '1.65' }}
-                    >
-                      {transcript}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {hasTranscript && !isRecording && (
-                <button
-                  onClick={applyFeedback}
-                  disabled={isProcessing}
-                  className="py-4 px-6 text-xs uppercase flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-50"
-                  style={{ background: '#c0392b', color: '#f6f3eb', letterSpacing: '0.15em' }}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 size={14} className="animate-spin" /> Revising
-                    </>
-                  ) : (
-                    <>
-                      <FileText size={14} /> Apply {reviewerName.split(' ')[0]}'s Feedback
-                    </>
-                  )}
-                </button>
-              )}
-            </>
-          )}
-
-          {error && (
-            <div
-              className="text-sm p-4"
-              style={{ background: '#fdf0ed', color: '#c0392b', border: '1px solid #f4c8c0' }}
+            <p className="text-sm mb-4" style={{ color: '#3a3530', lineHeight: 1.6 }}>
+              Add these environment variables to your Netlify deploy to pull in drafts:
+            </p>
+            <pre
+              className="mono text-xs p-4 mb-4"
+              style={{ background: '#1a1815', color: '#f6f3eb', overflow: 'auto' }}
             >
-              {error}
-            </div>
-          )}
-        </section>
-      </main>
+{`WP_SITE_URL=https://yoursite.com
+WP_USERNAME=your-wp-username
+WP_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx`}
+            </pre>
+            <p className="text-xs" style={{ color: '#8a7f6a' }}>
+              Generate an Application Password in WordPress under{' '}
+              <strong>Users → Profile → Application Passwords</strong>. See the README for details.
+            </p>
+          </div>
+        )}
 
-      <footer className="max-w-7xl mx-auto px-8 pb-8 pt-2">
-        <p className="text-xs text-center" style={{ color: '#a89d87' }}>
-          Voice recording uses your browser's built-in speech recognition. Works best in Chrome,
-          Edge, and Safari.
-        </p>
-      </footer>
+        {drafts === null && !error && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 size={20} className="animate-spin" style={{ color: '#8a7f6a' }} />
+          </div>
+        )}
+
+        {drafts && drafts.length === 0 && !notConfigured && !error && (
+          <div className="text-center py-20">
+            <FileText size={32} className="mx-auto mb-3" style={{ color: '#c0b89a' }} />
+            <p className="display text-lg" style={{ color: '#3a3530' }}>
+              No drafts waiting
+            </p>
+            <p className="text-xs mt-2" style={{ color: '#8a7f6a' }}>
+              New drafts in WordPress will appear here.
+            </p>
+          </div>
+        )}
+
+        {drafts && drafts.length > 0 && (
+          <div className="space-y-4">
+            {drafts.map((d) => {
+              const statusStyle = STATUS_STYLES[d.status] || STATUS_STYLES.draft;
+              return (
+                <Link
+                  key={d.id}
+                  href={`/edit/${d.id}`}
+                  className="block bg-white paper-shadow p-8 transition-all hover:translate-y-[-2px] hover:shadow-lg"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <div className="flex items-baseline justify-between gap-4 mb-3">
+                    <h3
+                      className="display text-2xl tracking-tight"
+                      style={{
+                        color: '#1a1815',
+                        fontWeight: 500,
+                        fontVariationSettings: '"opsz" 100',
+                        lineHeight: 1.25,
+                      }}
+                    >
+                      {d.title || '(Untitled)'}
+                    </h3>
+                    <span
+                      className="text-xs uppercase whitespace-nowrap px-2.5 py-1"
+                      style={{
+                        color: statusStyle.color,
+                        background: statusStyle.bg,
+                        letterSpacing: '0.12em',
+                      }}
+                    >
+                      {statusStyle.label}
+                    </span>
+                  </div>
+                  {d.excerpt && (
+                    <p
+                      className="text-sm mb-4"
+                      style={{ color: '#3a3530', lineHeight: 1.6 }}
+                    >
+                      {d.excerpt}
+                      {d.excerpt.length >= 160 && '…'}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-4 text-xs" style={{ color: '#8a7f6a' }}>
+                    <span>Updated {relativeTime(d.modified)}</span>
+                    <span>·</span>
+                    <span>{d.wordCount} words</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="mt-12 pt-8 border-t" style={{ borderColor: '#e0d8c4' }}>
+          <Link
+            href="/standalone"
+            className="text-xs flex items-center gap-2 hover:underline"
+            style={{ color: '#8a7f6a', letterSpacing: '0.1em' }}
+          >
+            <ExternalLink size={12} />
+            Or edit a draft that isn't in WordPress
+          </Link>
+        </div>
+      </main>
     </div>
   );
 }

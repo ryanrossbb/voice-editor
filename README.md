@@ -1,107 +1,107 @@
-# Voice Editor
+# Voice Editor — v2
 
-A web app that lets a reviewer revise blog post drafts by **speaking** their feedback. The app transcribes their voice in the browser, sends the transcript + draft to Claude, and produces a revised version they can accept or discard.
+A lightweight CMS layer for a subject matter expert (e.g. Matt Simon) to review WordPress drafts **by speaking** their feedback. Matt opens the dashboard, picks a draft, talks into the mic, watches Claude revise it, accepts the changes, and saves back to WordPress in one click.
 
-Built for sending drafts to a subject matter expert (e.g. Matt Simon) who'd rather talk than type.
+## What's new in v2
+
+- **WordPress drafts dashboard at `/`** — pulls draft, pending, private, and scheduled posts via the WP REST API
+- **Edit-in-place at `/edit/[id]`** — voice editor loads the post, saves back when Matt's done
+- **Markdown round-trip** — headings, bold, italics, lists, and links survive the editing loop
+- **Title editing** — Matt can also revise headlines
+- **Original paste-a-draft flow still lives at `/standalone`** — useful for content not in WordPress yet
 
 ---
 
-## How it works
+## Upgrading from v1
 
-1. You paste a draft in the editor and click **Get link**
-2. The URL (which contains the encoded draft) goes to your reviewer
-3. They open the link — draft is pre-loaded
-4. They tap the mic, talk through their feedback, tap stop
-5. They click **Apply Feedback** — Claude revises the draft using their spoken input
-6. They Accept or Discard. Accepted revision becomes the new draft and they can iterate.
-7. When happy, **Copy draft** sends the final text to clipboard
+If you already have v1 deployed:
 
-No login. No install. Works on desktop and most mobile browsers.
+1. **Replace your project files** with everything in this folder. Keep your existing `.env.local` and `.git` folder — don't overwrite those.
+2. **Add the new env vars** to `.env.local` (and to your Netlify environment variables): `WP_SITE_URL`, `WP_USERNAME`, `WP_APP_PASSWORD`.
+3. **Install the new dependencies**: `npm install` (this will add `turndown` and `marked`).
+4. **Commit and push** — Netlify will auto-deploy.
+
+```bash
+git add .
+git commit -m "v2: WordPress dashboard + save-back"
+git push
+```
+
+---
+
+## Setting up WordPress access
+
+1. Log into the WordPress admin of the site you want to connect.
+2. Go to **Users → Profile** (or **Users → All Users → Edit** for a specific user).
+3. Scroll to **Application Passwords**.
+4. Enter a name like "Voice Editor", click **Add New Application Password**.
+5. WordPress shows you a string like `abcd 1234 efgh 5678 ijkl 9012` — copy it (including spaces). You won't see it again.
+6. Paste it into `WP_APP_PASSWORD` in your env vars.
+7. Set `WP_USERNAME` to the WordPress login name of that user (not the email).
+8. Set `WP_SITE_URL` to the site root, e.g. `https://njwebinar.naifa.org` (no trailing slash, no `/wp-admin`).
+
+**Important:** the WordPress user needs to be an Editor or Administrator. Authors can only see their own drafts.
 
 ---
 
 ## Local setup
 
-You'll need [Node.js](https://nodejs.org/) 18+ installed.
-
 ```bash
-# 1. Install dependencies
 npm install
-
-# 2. Add your Anthropic API key
 cp .env.local.example .env.local
-# Then edit .env.local and paste your key from console.anthropic.com
-
-# 3. Run locally
+# Edit .env.local — fill in all four variables
 npm run dev
 ```
 
-Visit http://localhost:3000 and try it out.
+Visit http://localhost:3000.
 
 ---
 
-## Deploy to Vercel (recommended)
+## Deploy to Netlify
 
-Vercel hosts Next.js apps for free and the deployment takes ~3 minutes.
+Push to GitHub, import the repo on Netlify (same steps as v1). Add all four environment variables in the Netlify dashboard:
 
-1. Push this folder to a GitHub repo (private is fine):
-   ```bash
-   git init
-   git add .
-   git commit -m "initial"
-   git remote add origin https://github.com/YOU/voice-editor.git
-   git push -u origin main
-   ```
-
-2. Go to [vercel.com](https://vercel.com), click **Add New → Project**, import the repo.
-
-3. In the **Environment Variables** section, add:
-   - Key: `ANTHROPIC_API_KEY`
-   - Value: your key from [console.anthropic.com](https://console.anthropic.com/)
-
-4. Click **Deploy**. You'll get a URL like `voice-editor-xyz.vercel.app`.
-
-5. (Optional) Connect a custom domain in Vercel's project settings.
+- `ANTHROPIC_API_KEY`
+- `WP_SITE_URL`
+- `WP_USERNAME`
+- `WP_APP_PASSWORD`
 
 ---
 
-## URL parameters
+## How Matt's workflow looks
 
-The app reads two optional query parameters:
-
-| Param  | What it does                                            |
-| ------ | ------------------------------------------------------- |
-| `d`    | Base64-encoded draft text — pre-fills the editor        |
-| `name` | The reviewer's name — shown in the header and prompt    |
-
-The **Get link** button builds these automatically. You can also link directly:
-
-```
-https://your-app.vercel.app/?name=Jane%20Doe
-```
-
-…to open a blank editor branded for a different reviewer.
+1. Matt opens the dashboard URL — sees all drafts as cards, newest first
+2. Clicks one — voice editor loads with the post content
+3. Listens, thinks, taps the mic, talks ("the second paragraph should mention the new contribution limits and the intro is too soft, make it punchier")
+4. Taps stop, taps **Apply Matt's Feedback** — Claude returns a revised version
+5. Reviews the revision side-by-side with the original. Accepts or discards.
+6. Can iterate — record more feedback on the new version, apply again.
+7. Edits the title inline if needed.
+8. Taps **Save** in the top bar — the changes go back to WordPress as an update to the same draft.
 
 ---
 
-## Customizing for a different reviewer
+## URL routes
 
-The default name is "Matt Simon" but it's overridden by the `name` URL param. If you want a different default, change line 51 of `app/page.jsx`:
-
-```js
-const [reviewerName, setReviewerName] = useState('Matt Simon');
-```
-
-The Claude prompt that does the revision lives in `app/api/revise/route.js`. Edit that file if you want to change the editorial instructions Claude gets — for example, tightening it for a specific publication's house style.
+| Route          | What it does                                                       |
+| -------------- | ------------------------------------------------------------------ |
+| `/`            | Dashboard — list of WordPress drafts                               |
+| `/edit/[id]`   | Voice editor for a specific WordPress post                         |
+| `/standalone`  | Original paste-a-draft flow with shareable links                   |
+| `/api/wp/drafts` | (internal) Returns draft list                                    |
+| `/api/wp/post/[id]` | (internal) Returns a single post as markdown                  |
+| `/api/wp/save/[id]` | (internal) Saves edits back to WordPress                      |
+| `/api/revise`  | (internal) Sends draft + transcript to Claude, returns revision    |
 
 ---
 
-## Notes
+## Notes & tradeoffs
 
-- **Browser support for voice**: Chrome and Edge are rock solid. Safari works (desktop + iOS). Firefox doesn't support the Web Speech API.
-- **URL length**: Drafts up to roughly 8,000 characters (≈1,300 words) fit comfortably in a shareable URL. For longer pieces, the reviewer can paste directly or you can extend this with a database-backed share-ID system.
-- **API key safety**: The Anthropic key only lives on the server (in the `/api/revise` route). The browser never sees it.
-- **Cost**: Each "Apply Feedback" call is one Sonnet API request — typically well under a cent per revision for normal-length posts.
+- **Gutenberg blocks**: WordPress's block markup (`<!-- wp:paragraph -->` etc.) gets stripped during the markdown round-trip. When you save, the post becomes a "Classic" block in the editor. You can convert it back to blocks in WordPress with one click, but it's a small friction point. If this matters for your workflow, we can build a Gutenberg-aware version later.
+- **Drafts only**: by design, the dashboard shows only unpublished posts (draft, pending, private, scheduled). Published posts aren't editable through this UI — that's intentional, since edits to live content usually go through a different review process.
+- **Single reviewer**: the app is hardcoded for Matt Simon. Change the `reviewerName` constant in `app/page.jsx` and `app/edit/[id]/page.jsx` for a different reviewer, or refactor to support multiple.
+- **No auth on the app itself**: anyone with the URL can see drafts. For a private deploy, add [Netlify Identity](https://docs.netlify.com/visitor-access/identity/) or a password-protected branch (one config line).
+- **Speech recognition**: Chrome, Edge, and Safari only. Firefox doesn't support the Web Speech API.
 
 ---
 
@@ -110,5 +110,7 @@ The Claude prompt that does the revision lives in `app/api/revise/route.js`. Edi
 - [Next.js 14](https://nextjs.org/) (App Router)
 - [Tailwind CSS](https://tailwindcss.com/)
 - [lucide-react](https://lucide.dev/) for icons
-- Browser-native [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) for transcription
-- [Anthropic API](https://docs.anthropic.com/) (Claude Sonnet 4.6) for revisions
+- [turndown](https://github.com/mixmark-io/turndown) for HTML → Markdown
+- [marked](https://marked.js.org/) for Markdown → HTML
+- WordPress REST API + Application Passwords
+- Anthropic API (Claude Sonnet 4.6)

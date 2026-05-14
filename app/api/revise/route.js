@@ -2,7 +2,7 @@ export const runtime = 'nodejs';
 
 export async function POST(request) {
   try {
-    const { draft, transcript, reviewerName } = await request.json();
+    const { draft, transcript, reviewerName, contentFormat } = await request.json();
 
     if (!draft || !transcript) {
       return Response.json(
@@ -19,6 +19,11 @@ export async function POST(request) {
     }
 
     const name = (reviewerName || 'the reviewer').trim();
+    const isMarkdown = contentFormat === 'markdown';
+
+    const formatNote = isMarkdown
+      ? `IMPORTANT: The draft is in Markdown format. Preserve ALL markdown structure exactly: headings (#, ##, ###), bold (**), italics (_), bulleted/numbered lists, links ([text](url)), and blockquotes. Only change content, not formatting, unless ${name} specifically asks you to.`
+      : `The draft is plain text. Preserve paragraph breaks.`;
 
     const prompt = `You are revising a draft blog post based on spoken feedback from ${name}, a subject matter expert. Their feedback was transcribed from voice and may contain casual phrasing, filler words, or minor transcription errors — interpret it intelligently.
 
@@ -29,13 +34,15 @@ Your job:
 - If they give specific edits ("change the second paragraph to say X"), apply them precisely
 - Ignore filler words and asides that aren't actually instructions
 
+${formatNote}
+
 DRAFT:
 ${draft}
 
 ${name.toUpperCase()}'S FEEDBACK (transcribed from voice):
 ${transcript}
 
-Return ONLY the revised draft. No preamble, no commentary, no markdown code fences. Just the updated text.`;
+Return ONLY the revised draft. No preamble, no commentary, no markdown code fences around the whole response. Just the updated text, in the same format as the input.`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
