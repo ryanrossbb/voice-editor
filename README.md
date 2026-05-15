@@ -1,46 +1,101 @@
-# Voice Editor — v2
+# Voice Editor — v3
 
-A lightweight CMS layer for a subject matter expert (e.g. Matt Simon) to review WordPress drafts **by speaking** their feedback. Matt opens the dashboard, picks a draft, talks into the mic, watches Claude revise it, accepts the changes, and saves back to WordPress in one click.
+A lightweight CMS layer where a subject matter expert (Matt) signs in, sees what drafts need review and what's coming up next, and revises drafts by **speaking** their feedback into the browser.
 
-## What's new in v2
+## What's new in v3
 
-- **WordPress drafts dashboard at `/`** — pulls draft, pending, private, and scheduled posts via the WP REST API
-- **Edit-in-place at `/edit/[id]`** — voice editor loads the post, saves back when Matt's done
-- **Markdown round-trip** — headings, bold, italics, lists, and links survive the editing loop
-- **Title editing** — Matt can also revise headlines
-- **Original paste-a-draft flow still lives at `/standalone`** — useful for content not in WordPress yet
+- **Login wall** powered by Supabase. Email + password. Accounts created manually.
+- **"Coming Up" pipeline panel** on the dashboard, populated from a published Google Sheet
+- **Single-page workspace**: drafts that need review on top, upcoming topics below
 
 ---
 
-## Upgrading from v1
+## Upgrading from v2
 
-If you already have v1 deployed:
+If you already have v2 deployed:
 
-1. **Replace your project files** with everything in this folder. Keep your existing `.env.local` and `.git` folder — don't overwrite those.
-2. **Add the new env vars** to `.env.local` (and to your Netlify environment variables): `WP_SITE_URL`, `WP_USERNAME`, `WP_APP_PASSWORD`.
-3. **Install the new dependencies**: `npm install` (this will add `turndown` and `marked`).
-4. **Commit and push** — Netlify will auto-deploy.
+1. Replace your project files with the contents of this folder. Keep your `.env.local` and `.git` folder.
+2. Run `npm install` to pull in the new dependencies (`@supabase/ssr`, `@supabase/supabase-js`, `papaparse`).
+3. Add the new env vars (Supabase + Google Sheet) — locally **and** on Netlify.
+4. Commit and push. Netlify will redeploy.
 
 ```bash
 git add .
-git commit -m "v2: WordPress dashboard + save-back"
+git commit -m "v3: login + pipeline panel"
 git push
 ```
 
 ---
 
-## Setting up WordPress access
+## Setting up Supabase (~10 minutes)
 
-1. Log into the WordPress admin of the site you want to connect.
-2. Go to **Users → Profile** (or **Users → All Users → Edit** for a specific user).
-3. Scroll to **Application Passwords**.
-4. Enter a name like "Voice Editor", click **Add New Application Password**.
-5. WordPress shows you a string like `abcd 1234 efgh 5678 ijkl 9012` — copy it (including spaces). You won't see it again.
-6. Paste it into `WP_APP_PASSWORD` in your env vars.
-7. Set `WP_USERNAME` to the WordPress login name of that user (not the email).
-8. Set `WP_SITE_URL` to the site root, e.g. `https://njwebinar.naifa.org` (no trailing slash, no `/wp-admin`).
+1. Go to [supabase.com](https://supabase.com) and sign up (free tier is fine).
+2. Click **New project**. Give it a name, set a database password (write it down — you won't need it for this app, but Supabase requires one), pick a region close to you, click Create.
+3. Wait ~60 seconds for the project to spin up.
+4. In the project dashboard, go to **Project Settings → API**.
+5. Copy two values into your env vars:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **Project API keys → anon public** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-**Important:** the WordPress user needs to be an Editor or Administrator. Authors can only see their own drafts.
+### Disable public signups (important!)
+
+By default Supabase lets anyone sign up. Since only you and Matt should have accounts, turn signups off:
+
+1. **Authentication → Sign In / Up** (sidebar)
+2. Toggle **Allow new users to sign up** to OFF
+3. Save
+
+### Create accounts for you and Matt
+
+1. **Authentication → Users** (sidebar)
+2. Click **Add user → Create new user**
+3. Fill in email + password
+4. **Check the "Auto Confirm User" box** so you don't have to verify the email
+5. Click Create
+6. Repeat for Matt
+
+You're done with Supabase setup. The app will redirect any visitor to `/login` and only let in users you've manually added.
+
+---
+
+## Setting up the Google Sheet (~2 minutes)
+
+### Create the sheet
+
+In a new Google Sheet, the first row should be these headers (in any order — the app finds them by name):
+
+| Column           | What it's for                                            | Required? |
+| ---------------- | -------------------------------------------------------- | --------- |
+| `Title`          | Working title for the article                            | Yes       |
+| `Keyword`        | Primary SEO keyword you're targeting                     | No        |
+| `Target Date`    | When you plan to publish (any parseable date format)     | No        |
+| `Status`         | Idea / Researching / Drafting / Ready for Matt / Scheduled / Published | No |
+| `Notes`          | Angle, audience, special instructions                    | No        |
+| `Search Volume`  | Monthly searches for the keyword                         | No        |
+| `Search Intent`  | Informational / commercial / navigational                | No        |
+
+Any row without a Title is skipped, so you can leave blank rows for spacing.
+
+**Status colors on the dashboard:**
+- `Idea` → grey
+- `Researching` → blue
+- `Drafting` → orange
+- `Ready for Matt` or `Ready for Review` → red (calls attention)
+- `Scheduled` or `Published` → green
+- Anything else → neutral grey
+
+### Publish the sheet as CSV
+
+1. In your sheet: **File → Share → Publish to web**
+2. Under **Link**, pick the tab you want (or "Entire Document")
+3. Change the format from "Web page" to **Comma-separated values (.csv)**
+4. Click **Publish**, confirm
+5. Copy the URL it gives you (it'll look like `https://docs.google.com/spreadsheets/d/e/.../pub?output=csv`)
+6. Paste that into `GOOGLE_SHEET_CSV_URL` in your env vars
+
+**Note on privacy:** Published CSVs are accessible to anyone with the URL. The URL is long and obscure, but treat it as semi-public. Don't put client confidential info in the sheet.
+
+The published version updates automatically within a minute or two of any edit you make to the source sheet.
 
 ---
 
@@ -49,68 +104,66 @@ git push
 ```bash
 npm install
 cp .env.local.example .env.local
-# Edit .env.local — fill in all four variables
+# Edit .env.local — fill in your values
 npm run dev
 ```
 
-Visit http://localhost:3000.
+Visit http://localhost:3000. You'll be redirected to `/login`. Sign in with one of the accounts you created in Supabase.
+
+If you haven't set up Supabase yet, leave `NEXT_PUBLIC_SUPABASE_URL` blank and the login wall is disabled (everything is public). Set it up when you're ready.
 
 ---
 
 ## Deploy to Netlify
 
-Push to GitHub, import the repo on Netlify (same steps as v1). Add all four environment variables in the Netlify dashboard:
+In the Netlify dashboard for your site, **Site configuration → Environment variables**. Add all of these (mirror what's in your `.env.local`):
 
 - `ANTHROPIC_API_KEY`
 - `WP_SITE_URL`
 - `WP_USERNAME`
 - `WP_APP_PASSWORD`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `GOOGLE_SHEET_CSV_URL`
 
----
-
-## How Matt's workflow looks
-
-1. Matt opens the dashboard URL — sees all drafts as cards, newest first
-2. Clicks one — voice editor loads with the post content
-3. Listens, thinks, taps the mic, talks ("the second paragraph should mention the new contribution limits and the intro is too soft, make it punchier")
-4. Taps stop, taps **Apply Matt's Feedback** — Claude returns a revised version
-5. Reviews the revision side-by-side with the original. Accepts or discards.
-6. Can iterate — record more feedback on the new version, apply again.
-7. Edits the title inline if needed.
-8. Taps **Save** in the top bar — the changes go back to WordPress as an update to the same draft.
+Then **Deploys → Trigger deploy → Deploy site**.
 
 ---
 
 ## URL routes
 
-| Route          | What it does                                                       |
-| -------------- | ------------------------------------------------------------------ |
-| `/`            | Dashboard — list of WordPress drafts                               |
-| `/edit/[id]`   | Voice editor for a specific WordPress post                         |
-| `/standalone`  | Original paste-a-draft flow with shareable links                   |
-| `/api/wp/drafts` | (internal) Returns draft list                                    |
-| `/api/wp/post/[id]` | (internal) Returns a single post as markdown                  |
-| `/api/wp/save/[id]` | (internal) Saves edits back to WordPress                      |
-| `/api/revise`  | (internal) Sends draft + transcript to Claude, returns revision    |
+| Route          | What it does                                                  |
+| -------------- | ------------------------------------------------------------- |
+| `/`            | Dashboard — drafts needing review + upcoming topics           |
+| `/login`       | Login form (Supabase email + password)                        |
+| `/edit/[id]`   | Voice editor for a specific WordPress post                    |
+| `/standalone`  | Original paste-a-draft flow with shareable links              |
+| `/api/wp/*`    | (internal) WordPress integration                              |
+| `/api/pipeline` | (internal) Returns sheet rows                                |
+| `/api/auth/signout` | (internal) Clears session                                |
+| `/api/revise`  | (internal) Sends draft + transcript to Claude                 |
+
+Everything except `/login` and `/api/auth/*` requires login (when Supabase is configured).
 
 ---
 
 ## Notes & tradeoffs
 
-- **Gutenberg blocks**: WordPress's block markup (`<!-- wp:paragraph -->` etc.) gets stripped during the markdown round-trip. When you save, the post becomes a "Classic" block in the editor. You can convert it back to blocks in WordPress with one click, but it's a small friction point. If this matters for your workflow, we can build a Gutenberg-aware version later.
-- **Drafts only**: by design, the dashboard shows only unpublished posts (draft, pending, private, scheduled). Published posts aren't editable through this UI — that's intentional, since edits to live content usually go through a different review process.
-- **Single reviewer**: the app is hardcoded for Matt Simon. Change the `reviewerName` constant in `app/page.jsx` and `app/edit/[id]/page.jsx` for a different reviewer, or refactor to support multiple.
-- **No auth on the app itself**: anyone with the URL can see drafts. For a private deploy, add [Netlify Identity](https://docs.netlify.com/visitor-access/identity/) or a password-protected branch (one config line).
-- **Speech recognition**: Chrome, Edge, and Safari only. Firefox doesn't support the Web Speech API.
+- **Account recovery**: there's no "forgot password" flow built in yet. If Matt forgets his password, reset it via Supabase dashboard → Users → click his row → Reset password.
+- **Adding users later**: Authentication → Users → Add user. Make sure "Allow new users to sign up" stays disabled.
+- **Pipeline cache**: each dashboard load fetches the sheet fresh. If the sheet doesn't update within ~60 seconds after you edit it, that's Google's publishing delay, not the app's.
+- **Single reviewer name**: the dashboard says "Matt Simon's Workspace". Edit `app/page.jsx` to change.
 
 ---
 
 ## Stack
 
 - [Next.js 14](https://nextjs.org/) (App Router)
+- [Supabase](https://supabase.com/) for auth
 - [Tailwind CSS](https://tailwindcss.com/)
 - [lucide-react](https://lucide.dev/) for icons
 - [turndown](https://github.com/mixmark-io/turndown) for HTML → Markdown
 - [marked](https://marked.js.org/) for Markdown → HTML
+- [papaparse](https://www.papaparse.com/) for CSV parsing
 - WordPress REST API + Application Passwords
 - Anthropic API (Claude Sonnet 4.6)
