@@ -10,6 +10,7 @@ import {
   Loader2,
   LogOut,
   Calendar,
+  Settings,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
@@ -132,30 +133,42 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen w-full">
       <header className="border-b px-8 py-6" style={{ borderColor: '#e0d8c4' }}>
-        <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <div>
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-6">
+          <div className="min-w-0">
             <h1
-              className="display text-3xl tracking-tight"
-              style={{ color: '#1a1815', fontWeight: 500, fontVariationSettings: '"opsz" 144' }}
+              className="display text-2xl sm:text-3xl tracking-tight"
+              style={{
+                color: '#1a1815',
+                fontWeight: 500,
+                fontVariationSettings: '"opsz" 144',
+                lineHeight: 1.1,
+              }}
             >
-              Voice Editor
+              MedTech Financial
             </h1>
             <p
               className="text-xs uppercase mt-1"
               style={{ color: '#8a7f6a', letterSpacing: '0.22em' }}
             >
-              Matt Simon's Workspace
+              Marketing Dashboard
             </p>
           </div>
           {userEmail && (
-            <div className="flex items-center gap-4 text-xs" style={{ color: '#8a7f6a' }}>
-              <span className="hidden sm:inline">{userEmail}</span>
+            <div className="flex items-center gap-4 text-xs flex-shrink-0" style={{ color: '#8a7f6a' }}>
+              <span className="hidden md:inline">{userEmail}</span>
+              <Link
+                href="/settings"
+                className="flex items-center gap-1.5 hover:underline uppercase"
+                style={{ letterSpacing: '0.15em' }}
+              >
+                <Settings size={11} /> <span className="hidden sm:inline">Settings</span>
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-1.5 hover:underline uppercase"
                 style={{ letterSpacing: '0.15em' }}
               >
-                <LogOut size={11} /> Sign out
+                <LogOut size={11} /> <span className="hidden sm:inline">Sign out</span>
               </button>
             </div>
           )}
@@ -348,7 +361,6 @@ export default function Dashboard() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      {/* Top row: cluster/audience tags + status */}
                       <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           {item.cluster && (
@@ -390,7 +402,6 @@ export default function Dashboard() {
                         )}
                       </div>
 
-                      {/* Title */}
                       <h3
                         className="display text-lg mb-2"
                         style={{
@@ -403,7 +414,6 @@ export default function Dashboard() {
                         {item.title}
                       </h3>
 
-                      {/* Metadata line: keyword + volume + KD + word target */}
                       {(item.keyword || item.searchVolume || item.kd || item.wordTarget || item.searchIntent) && (
                         <div
                           className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs"
@@ -441,7 +451,6 @@ export default function Dashboard() {
                         </div>
                       )}
 
-                      {/* Notes */}
                       {item.notes && (
                         <p
                           className="text-xs mt-2 italic"

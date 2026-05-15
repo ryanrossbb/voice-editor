@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Voice Editor',
-  description: 'Revise drafts by speaking.',
+  title: 'MedTech Financial Marketing Dashboard',
+  description: 'Editorial workspace for the MedTech Financial content team.',
 };
 
 export default function RootLayout({ children }) {

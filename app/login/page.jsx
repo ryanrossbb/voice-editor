@@ -112,16 +112,21 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <h1
-            className="display text-4xl tracking-tight"
-            style={{ color: '#1a1815', fontWeight: 500, fontVariationSettings: '"opsz" 144' }}
+            className="display text-3xl tracking-tight"
+            style={{
+              color: '#1a1815',
+              fontWeight: 500,
+              fontVariationSettings: '"opsz" 144',
+              lineHeight: 1.15,
+            }}
           >
-            Voice Editor
+            MedTech Financial
           </h1>
           <p
             className="text-xs uppercase mt-2"
             style={{ color: '#8a7f6a', letterSpacing: '0.22em' }}
           >
-            Sign in to continue
+            Marketing Dashboard
           </p>
         </div>
 
