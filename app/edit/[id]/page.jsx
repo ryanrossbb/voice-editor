@@ -287,7 +287,7 @@ export default function EditPost() {
             <>
               <div>
                 <h2 className="text-xs uppercase mb-3" style={{ color: '#8a7f6a', letterSpacing: '0.22em' }}>
-                  {reviewerName}'s Feedback
+                  Feedback
                 </h2>
                 <div className="bg-white p-10 soft-shadow flex flex-col items-center">
                   <button
