@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Loader2, AlertCircle } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next') || '/';
@@ -42,6 +42,72 @@ export default function LoginPage() {
   };
 
   return (
+    <form onSubmit={handleSubmit} className="bg-white paper-shadow p-10 space-y-5">
+      <div>
+        <label
+          className="block text-xs uppercase mb-2"
+          style={{ color: '#8a7f6a', letterSpacing: '0.18em' }}
+        >
+          Email
+        </label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          autoFocus
+          className="w-full bg-transparent border-b focus:outline-none py-2"
+          style={{ borderColor: '#d6cfbe', color: '#1a1815', fontSize: '15px' }}
+        />
+      </div>
+
+      <div>
+        <label
+          className="block text-xs uppercase mb-2"
+          style={{ color: '#8a7f6a', letterSpacing: '0.18em' }}
+        >
+          Password
+        </label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+          className="w-full bg-transparent border-b focus:outline-none py-2"
+          style={{ borderColor: '#d6cfbe', color: '#1a1815', fontSize: '15px' }}
+        />
+      </div>
+
+      {error && (
+        <div
+          className="text-xs p-3 flex items-start gap-2"
+          style={{ background: '#fdf0ed', color: '#c0392b', border: '1px solid #f4c8c0' }}
+        >
+          <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={isLoading || !email || !password}
+        className="w-full py-4 text-xs uppercase flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-30"
+        style={{ background: '#1a1815', color: '#f6f3eb', letterSpacing: '0.15em' }}
+      >
+        {isLoading ? (
+          <><Loader2 size={14} className="animate-spin" /> Signing in</>
+        ) : (
+          'Sign in'
+        )}
+      </button>
+    </form>
+  );
+}
+
+export default function LoginPage() {
+  return (
     <div className="min-h-screen w-full flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
@@ -59,80 +125,11 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white paper-shadow p-10 space-y-5">
-          <div>
-            <label
-              className="block text-xs uppercase mb-2"
-              style={{ color: '#8a7f6a', letterSpacing: '0.18em' }}
-            >
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              autoFocus
-              className="w-full bg-transparent border-b focus:outline-none py-2"
-              style={{
-                borderColor: '#d6cfbe',
-                color: '#1a1815',
-                fontSize: '15px',
-              }}
-            />
-          </div>
+        <Suspense fallback={<div className="bg-white paper-shadow p-10 text-center text-sm" style={{ color: '#8a7f6a' }}>Loading…</div>}>
+          <LoginForm />
+        </Suspense>
 
-          <div>
-            <label
-              className="block text-xs uppercase mb-2"
-              style={{ color: '#8a7f6a', letterSpacing: '0.18em' }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              className="w-full bg-transparent border-b focus:outline-none py-2"
-              style={{
-                borderColor: '#d6cfbe',
-                color: '#1a1815',
-                fontSize: '15px',
-              }}
-            />
-          </div>
-
-          {error && (
-            <div
-              className="text-xs p-3 flex items-start gap-2"
-              style={{ background: '#fdf0ed', color: '#c0392b', border: '1px solid #f4c8c0' }}
-            >
-              <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={isLoading || !email || !password}
-            className="w-full py-4 text-xs uppercase flex items-center justify-center gap-2 transition-all hover:opacity-90 disabled:opacity-30"
-            style={{ background: '#1a1815', color: '#f6f3eb', letterSpacing: '0.15em' }}
-          >
-            {isLoading ? (
-              <><Loader2 size={14} className="animate-spin" /> Signing in</>
-            ) : (
-              'Sign in'
-            )}
-          </button>
-        </form>
-
-        <p
-          className="text-xs text-center mt-8"
-          style={{ color: '#a89d87', lineHeight: 1.6 }}
-        >
+        <p className="text-xs text-center mt-8" style={{ color: '#a89d87', lineHeight: 1.6 }}>
           Accounts are created manually.<br />
           Contact the site owner for access.
         </p>
